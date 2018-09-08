@@ -1,0 +1,703 @@
+#include <iostream>
+#include <cstring>
+#include <vector>
+#include <algorithm> 
+#include <cstdlib>
+#include <queue>
+#define BLACK 1
+#define WHITE 2
+#define EMPTY 0
+#define bsize 15
+#define MIN -100000
+#define MAX 100000
+
+using namespace std;
+int first;
+int PCcolor = BLACK;
+int PLcolor = WHITE;
+int role;
+int anti_role;
+
+//用来记录下一步待下位置
+struct points {
+	int x;
+	int y;
+};
+
+struct node {
+	int chessstatues[bsize][bsize];
+	int depth;
+	int chessnumber_black;
+	int chessnumber_white;
+};
+
+struct node sortnode;
+
+int min(struct node chess, int deep, int alpha, int beta, struct points point);
+int max(struct node chess, int deep, int alpha, int beta, struct points point);
+int evaluate(int row, int col, struct node currentn, int role, int anti_role);
+
+//排序函数
+bool SortByMax(const points &v1, const points &v2)//注意：本函数的参数的类型一定要与vector中元素的类型一致  
+{
+	return evaluate(v1.x, v1.y, sortnode, role, anti_role) > evaluate(v2.x, v2.y, sortnode, role, anti_role);//升序排列  
+}
+
+bool SortByMin(const points &v1, const points &v2)//注意：本函数的参数的类型一定要与vector中元素的类型一致  
+{
+	//return evaluate(v1.x, v1.y, sortnode) < evaluate(v2.x, v2.y, sortnode);//降序排列  
+	return true;
+}
+
+//打印
+void Print(struct node chess) {
+	for (int i = -1; i < bsize; ++i) {
+		if (i == -1) {
+			cout << " ";
+			for (int k = 0; k < bsize; ++k) printf("%2d", k);
+		}else{
+			printf("%2d", i);
+			for (int j = 0; j < bsize; ++j) {
+				if (chess.chessstatues[i][j] == EMPTY) cout << "--";
+				else if (chess.chessstatues[i][j] == BLACK) cout << "●";
+				else if (chess.chessstatues[i][j] == WHITE) cout << "○";
+			}
+		}
+		cout << endl;
+	}
+}
+
+//初始化棋盘
+void initialize(struct node *chess) {
+	for (int i = 0; i < bsize; ++i) {
+		for (int j = 0; j < bsize; ++j) {
+			chess->chessstatues[i][j] = 0;
+		}
+	}
+}
+
+//判断输赢
+bool isWin(int row, int col, struct node currentn)//判断棋局输赢
+{
+	//横竖斜四种情况。每种情况都根据当前落子往后遍历5个棋子，有一种符合就算赢
+
+	//水平方向，横坐标不变
+	for (int i = 0; i<5; i++)
+	{
+		if (col - i > 0 && col - i + 4 < bsize&&
+			currentn.chessstatues[row][col - i] == currentn.chessstatues[row][col - i + 1] &&
+			currentn.chessstatues[row][col - i] == currentn.chessstatues[row][col - i + 2] &&
+			currentn.chessstatues[row][col - i] == currentn.chessstatues[row][col - i + 3] &&
+			currentn.chessstatues[row][col - i] == currentn.chessstatues[row][col - i + 4]) {
+			return true;
+		}
+	}
+	//竖直方向，纵坐标不变
+	for (int i = 0; i<5; i++)
+	{
+		if (row - i > 0 && row - i + 4 < bsize&&
+			currentn.chessstatues[row - i][col] == currentn.chessstatues[row - i + 1][col] &&
+			currentn.chessstatues[row - i][col] == currentn.chessstatues[row - i + 2][col] &&
+			currentn.chessstatues[row - i][col] == currentn.chessstatues[row - i + 3][col] &&
+			currentn.chessstatues[row - i][col] == currentn.chessstatues[row - i + 4][col]) {
+			return true;
+		}
+	}
+	//左斜方向(即副对角线方向)
+	for (int i = 0; i<5; i++)
+	{
+		if (row + i < bsize&&row + i - 4>0 &&
+			col - i > 0 && col - i + 4 < bsize&&
+			currentn.chessstatues[row + i][col - i] == currentn.chessstatues[row + i - 1][col - i + 1] &&
+			currentn.chessstatues[row + i][col - i] == currentn.chessstatues[row + i - 2][col - i + 2] &&
+			currentn.chessstatues[row + i][col - i] == currentn.chessstatues[row + i - 3][col - i + 3] &&
+			currentn.chessstatues[row + i][col - i] == currentn.chessstatues[row + i - 4][col - i + 4]) {
+			return true;
+		}
+	}
+	//右斜方向（即主对角线方向）
+	for (int i = 0; i<5; i++)
+	{
+		if (row - i > 0 && row - i + 4 < bsize&&
+			col - i > 0 && col - i + 4 < bsize&&
+			currentn.chessstatues[row - i][col - i] == currentn.chessstatues[row - i + 1][col - i + 1] &&
+			currentn.chessstatues[row - i][col - i] == currentn.chessstatues[row - i + 2][col - i + 2] &&
+			currentn.chessstatues[row - i][col - i] == currentn.chessstatues[row - i + 3][col - i + 3] &&
+			currentn.chessstatues[row - i][col - i] == currentn.chessstatues[row - i + 4][col - i + 4]) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//判断是否平局
+bool isDeadGame(struct node currentn)
+{
+	//判断棋盘是否已经填满
+	for (int i = 0; i<bsize; i++)
+	{
+		for (int j = 0; j<bsize; j++)
+		{
+			if (!(currentn.chessstatues[i][j] == BLACK || currentn.chessstatues[i][j] == WHITE))
+				return false;
+		}
+	}
+	return true;
+}
+
+//初步估值函数，对某一位置进行估值
+int evaluate(int row,int col,struct node currentn, int role, int anti_role)
+{
+    /*评估规则
+    成五，100000
+    活四, 10000
+    活三 1000
+    活二 100
+    活一 10
+    死四, 1000
+    死三 100
+    死二 10*/
+    int value=0;//评估出的分数
+    int player_n=0;//玩家棋子数
+    int computer_n=0;//电脑棋子数
+    int empty_n=0;//空白数
+    //假设电脑是黑棋
+    //针对电脑黑棋评分
+    int num=0;
+    for(int y=-1;y<=0;y++)
+    {
+        for(int x=-1;x<=1;x++)
+        {
+            player_n=0;
+            computer_n=0;
+            empty_n=0;
+            if(!((x==0||x==1)&&y==0))
+            {
+                num++;
+                for(int i=1;i<5;i++)
+                {
+                    if(row+i*x>0&&row+i*x<bsize&&
+                       col+i*y>0&&col+i*y<bsize)
+                       {
+                           if(currentn.chessstatues[row+i*x][col+i*y]==role)
+                               computer_n++;
+                           else if(currentn.chessstatues[row+i*x][col+i*y]==EMPTY)
+                           {
+                               empty_n++;
+                               break;
+                           }
+                           else
+                            break;
+                       }
+                    else
+                        break;//出边界
+                }
+                //反方向
+                for(int i=1;i<5;i++)
+                {
+                    if(row-i*x>0&&row-i*x<bsize&&
+                       col-i*y>0&&col-i*y<bsize)
+                    {
+                        if(currentn.chessstatues[row-i*x][col-i*y]==role)
+                            computer_n++;
+                        else if(currentn.chessstatues[row-i*x][col-i*y]==EMPTY)
+                        {
+                            empty_n++;
+                            break;
+                        }
+                        else
+                            break;
+                    }
+                    else
+                        break;//出边界
+                }
+                if(computer_n==0)//活一
+                {
+                    value += 10;
+                    //cout<<"普通下子 "<<value<<endl;
+                }
+
+                else if(computer_n==1)
+                {
+                    if(empty_n==1)//死二
+                    {
+                        value+=20;
+                        //cout<<"死二 "<<value<<endl;
+                    }
+                    else if(empty_n==2)//活二
+                    {
+                        value+=100;
+                        //cout<<"活二 "<<value<<endl;
+                    }
+                }
+                else if(computer_n==2)
+                {
+                    if(empty_n==1)//死三
+                    {
+                        value+=100;
+                        //cout<<"死三 "<<value<<endl;
+                    }
+                    else if(empty_n==2)//活三
+                    {
+                        value+=1000;
+                        //cout<<"活三 "<<value<<endl;
+                    }
+                }
+                else if(computer_n==3)
+                {
+                    if(empty_n==1)//死四
+                    {
+                        value+=1000;
+                        //cout<<"死四 "<<value<<endl;
+                    }
+                    else if(empty_n==2)//活四
+                    {
+                        value+=10000;
+                        //cout<<"活四 "<<value<<endl;
+                    }
+                }
+                else if(computer_n>=4)
+                {
+                    value+=1000000;
+                    //cout<<"成五 "<<value<<endl;
+                }
+
+                //针对玩家白棋评分
+                empty_n=0;//重新赋值
+                for(int i=1;i<5;i++)
+                {
+                    if(row+i*x>0&&row+i*x<bsize&&
+                       col+i*y>0&&col+i*y<bsize)
+                    {
+						if (currentn.chessstatues[row + i*x][col + i*y] == anti_role)
+                          player_n++;
+                       else if(currentn.chessstatues[row+i*x][col+i*y]==EMPTY)
+                       {
+                           empty_n++;
+                           break;
+                       }
+                       else
+                        break;
+                    }
+                    else
+                        break;//出边界
+                }
+                for(int i=1;i<5;i++)
+                {
+                    if(row-i*x>0&&row-i*x<bsize&&
+                       col-i*y>0&&col-i*y<bsize)
+                    {
+                        if(currentn.chessstatues[row-i*x][col-i*y]==anti_role)
+                            player_n++;
+                        else if(currentn.chessstatues[row-i*x][col-i*y]==EMPTY)
+                        {
+                            empty_n++;
+                            break;
+                        }
+                        else
+                            break;
+                    }
+                    else
+                        break;
+                }
+                if(player_n==1)//杀二
+                {
+                    value+=10;
+                    //cout<<"杀二 "<<value<<endl;
+                }
+                else if(player_n==2)
+                {
+                    if(empty_n==1)//杀三
+                    {
+                        value+=50;
+                        //cout<<"杀三 "<<value<<endl;
+                    }
+                    else if(empty_n==2)//杀活三
+                    {
+                        value+=1000;
+                        //cout<<"杀活三 "<<value<<endl;
+                    }
+                }
+                else if(player_n==3)
+                {
+                    if(empty_n==1)//杀四
+                    {
+                        value+=1000;
+                        //cout<<"杀四 "<<value<<endl;
+                    }
+                    else if(empty_n==2)//杀活四
+                    {
+                        value+=10000;
+                        //cout<<"杀活四 "<<value<<endl;
+                    }
+                }
+                else if(player_n==4)
+                {
+					value += 10100;
+                    //cout<<"杀成五 "<<value<<endl;
+                }
+            }
+        }
+    }
+    return value;
+}
+
+//估值函数累计估值
+int scoretable(int number, int empty1)//计分板
+{
+	if (number >= 5)	return 1000000;
+	else if (number == 4)
+	{
+		if (empty1 == 2)	return 10000;
+		else if (empty1 == 1)	return 1000;
+	}
+	else if (number == 3)
+	{
+		if (empty1 == 2)	return 1000;
+		else if (empty1 == 1)	return 100;
+	}
+	else if (number == 2)
+	{
+		if (empty1 == 2)	return 100;
+		else if (empty1 == 1)	return 10;
+	}
+	else if (number == 1 && empty1 == 2)	return 10;
+	return 0;
+}
+
+//正斜线、反斜线、横、竖，均转成一维数组来计算 
+int countscore(vector<int> n, int turn){
+	int scoretmp = 0;
+	int len = n.size();
+	int empty1 = 0;
+	int number = 0;
+	if (n[0] == 0)	++empty1;
+	else if (n[0] == turn)	++number;
+	int i = 1;
+	while (i < len)
+	{
+		if (n[i] == turn)	++number;
+		else if (n[i] == 0)
+		{
+			if (number == 0)	empty1 = 1;
+			else
+			{
+				scoretmp += scoretable(number, empty1 + 1);
+				empty1 = 1;
+				number = 0;
+			}
+		}
+		else
+		{
+			scoretmp += scoretable(number, empty1);
+			empty1 = 0;
+			number = 0;
+		}
+		++i;
+	}
+	scoretmp += scoretable(number, empty1);
+	return scoretmp;
+}
+
+//全局估值函数
+int evaluate_map(struct node chess)//评估函数，评估局势
+{
+	int scorecomputer = 0;
+	int scorehumber = 0;
+
+	//横排们
+	for (int i = 0; i < bsize; ++i)
+	{
+		vector<int> n;
+		for (int j = 0; j < bsize; ++j)
+			n.push_back(chess.chessstatues[i][j]);
+		scorecomputer += countscore(n, 1);
+		scorehumber += countscore(n, 2);
+		n.clear();
+	}
+
+	//竖排们
+	for (int j = 0; j < bsize; ++j)
+	{
+		vector<int> n;
+		for (int i = 0; i < bsize; ++i)
+			n.push_back(chess.chessstatues[i][j]);
+		scorecomputer += countscore(n, 1);
+		scorehumber += countscore(n, 2);
+		n.clear();
+	}
+
+	//上半正斜线们 
+	for (int i = 0; i < bsize; ++i)
+	{
+		int x, y;
+		vector<int> n;
+		for (x = i, y = 0; x < bsize && y < bsize; ++x, ++y)
+			n.push_back(chess.chessstatues[y][x]);
+		scorecomputer += countscore(n, 1);
+		scorehumber += countscore(n, 2);
+		n.clear();
+	}
+
+	//下半正斜线们
+	for (int j = 1; j < bsize; ++j)
+	{
+		int x, y;
+		vector<int> n;
+		for (x = 0, y = j; y < bsize && x < bsize; ++x, ++y)
+			n.push_back(chess.chessstatues[y][x]);
+		scorecomputer += countscore(n, 1);
+		scorehumber += countscore(n, 2);
+		n.clear();
+	}
+  
+	//上半反斜线们
+	for (int i = 0; i < bsize; ++i)
+	{
+		vector<int> n;
+		int x, y;
+		for (y = i, x = 0; y >= 0 && x < bsize; --y, ++x)
+			n.push_back(chess.chessstatues[y][x]);
+		scorecomputer += countscore(n, 1);
+		scorehumber += countscore(n, 2);
+		n.clear();
+	}
+  
+	//下半反斜线们
+	for (int j = 1; j < bsize; ++j)
+	{
+		vector<int> n;
+		int x, y;
+		for (y = j, x = bsize - 1; y < bsize && x >= 0; ++y, --x)
+			n.push_back(chess.chessstatues[x][y]);
+		scorecomputer += countscore(n, 1);
+		scorehumber += countscore(n, 2);
+		n.clear();
+	}
+
+	return scorecomputer - scorehumber;
+}
+
+//------------------------------------逻辑部分-------------------------------------------//
+
+//遍历棋盘，寻找已知棋子周边空白位置，返回这些位置的容器
+vector<points> generate(struct node chess) {
+
+	bool chessflag[bsize][bsize];//控制每个位置遍历一遍
+	memset(chessflag, false, sizeof(chessflag));
+
+	vector<points> nextpoints;
+	for (int i = 0; i < bsize; ++i) {
+		for (int j = 0; j < bsize; ++j) {
+			if (chess.chessstatues[i][j] != EMPTY) {
+				int nx = i, ny = j;
+				for (int k = -1; k <= 1; ++k) {
+					for (int l = -1; l <= 1; ++l) {
+						if (k == 0 && l == 0) continue;
+						else if(chess.chessstatues[nx + k][ny + l] == EMPTY && chessflag[nx + k][ny + l] == false
+							&& nx + k < bsize && nx + k > 0 && ny + l < bsize && ny +l > 0){
+							struct points newpoint;
+							newpoint.x = nx + k;
+							newpoint.y = ny + l;
+							nextpoints.push_back(newpoint);
+							chessflag[nx + k][ny + l] = true;
+						}
+					}
+				}
+			}
+		}
+	}
+	//cout << nextpoints.size() << endl;
+	return nextpoints;
+}
+
+//max_min函数为第一步电脑可选策略
+points max_min(struct node chess, int deep) {
+
+	int best = MIN;//初始化最优值
+	int alpha = MAX;//alpha用于max层中的剪枝，当有大于alpha时进行剪枝，同时要不断更新alpha为该层中的当前最大
+	int beta = MIN;
+	int posx, posy;
+	int score = 0;
+	vector<int> nextscore;
+
+
+	vector<points> nextpoints = generate(chess);//生成下一步可选位置
+	vector<points> bestpoints;//存放估值最大位置
+
+	sortnode = chess;
+	role = BLACK;
+	anti_role = WHITE;
+	sort(nextpoints.begin(), nextpoints.end(), SortByMax);
+	
+	/*
+	for (int i = 0; i < 10 && i < nextpoints.size(); ++i) {
+		cout << nextpoints[i].x << " " << nextpoints[i].y << endl;
+	}
+	*/
+	//遍历所有可下位置
+	for (int i = 0; i < nextpoints.size() && i < 5; ++i) {
+
+		struct points p = nextpoints[i];
+		chess.chessstatues[p.x][p.y] = PCcolor;//预先落子
+
+		score = min(chess, deep - 1, alpha, beta > best ? beta : best, p);//开始极大-极小策略，
+																	  //开始先思考玩家哪一步对自己最不利
+
+		nextscore.push_back(score);
+		if (score == best) {//若数个位置估值相同，一起存入bestpoints容器
+			bestpoints.push_back(p);
+		}else if (score > best) {//否则清空容器，重新装入更高估值位置
+			best = score;
+			bestpoints.clear();
+			bestpoints.push_back(p);
+			posx = p.x;
+			posy = p.y;
+		}
+		chess.chessstatues[p.x][p.y] = EMPTY;//清除棋盘中在博弈阶段的棋子
+	}
+
+	nextpoints.clear();
+	struct points bestpoint = bestpoints[rand()% (bestpoints.size() - 0) + 0];
+	bestpoints.clear();
+	return bestpoint;
+}
+
+//以电脑角度选取最大估值位置，只返回最大估值
+int max(struct node chess, int deep, int alpha, int beta, struct points point) {
+
+	int best = MIN;
+	vector<points> nextpoints = generate(chess);
+	vector<points> bestpoints;
+	int score;
+	int pos;
+
+	sortnode = chess;
+	role = BLACK;
+	anti_role = WHITE;
+	sort(nextpoints.begin(), nextpoints.end(), SortByMax);
+
+	if (deep <= 0) {
+		int finalscore = evaluate_map(chess);
+
+		return finalscore;
+	}
+	
+
+	for (int i = 0; i < nextpoints.size() && i < 5; ++i) {
+
+		struct points p = nextpoints[i];
+		chess.chessstatues[p.x][p.y] = PCcolor;
+		score = min(chess, deep - 1, alpha, best > beta ? best : beta, p);//alpha为当前层最最大值，当本层best大于alpha，更新alpha
+
+  		if (score > best) {
+			best = score;
+			pos = i;
+			//Print(chess);
+		}
+		chess.chessstatues[p.x][p.y] = EMPTY;
+
+		if (score > alpha) break;
+		
+	}
+
+	nextpoints.clear();
+	return best;
+}
+
+//以玩家角度选取最小估值位置，只返回最小估值
+int min(struct node chess, int deep, int alpha, int beta, struct points point) {
+
+	int score = 0;
+	int best = MAX;
+	vector<points> nextpoints = generate(chess);
+	vector<points> bestpoints;
+	int pos = 0;
+
+	sortnode = chess;
+	role = WHITE;
+	anti_role = BLACK;
+	sort(nextpoints.begin(), nextpoints.end(), SortByMax);
+
+	if (deep <= 0) {
+		int finalscore = evaluate_map(chess);
+
+		return finalscore;
+	}
+
+	for (int i = 0; i < nextpoints.size() && i < 5; ++i) {
+
+		struct points p = nextpoints[i];
+		chess.chessstatues[p.x][p.y] = PLcolor;
+		score = max(chess, deep - 1, best < alpha ? best : alpha, beta, p);//更新bete使beta取该max层中的当前最小值
+
+		if (score < best) {
+			best = score;
+			pos = i;
+		}
+		chess.chessstatues[p.x][p.y] = EMPTY;
+
+		if (score < beta) break;
+	}
+
+	nextpoints.clear();
+
+	return best;
+}
+
+int main() {
+	struct node chess;
+	initialize(&chess);
+
+	int PCcolor = BLACK;
+	int PLcolor = WHITE;//规定电脑黑棋，玩家白棋
+	int row, col;
+
+	//处理先手
+	cout << "Who first? 1.Me or 2.Allvey?" << endl;
+	cin >> first;
+
+	if (first == 1) {//玩家先手
+		cin >> row >> col;
+		chess.chessstatues[row][col] = PLcolor;
+	}
+	else if (first == 2) {//电脑先手
+		chess.chessstatues[7][7] = PCcolor;//规定电脑第一步一定走（7,7）
+		Print(chess);
+
+		cin >> row >> col;//玩家输入
+		chess.chessstatues[row][col] = PLcolor;
+	}
+	
+	Print(chess);
+
+	//以电脑开始，交替博弈
+	do {
+		struct points point = max_min(chess,5);//电脑计算最优策略
+		
+		cout << point.x << " " << point.y << endl;
+		chess.chessstatues[point.x][point.y] = PCcolor;//电脑落子
+		Print(chess);
+		if (isWin(point.x, point.y, chess)) {
+			cout << "You Lose!" << endl;
+			break;
+		}
+		
+		
+		aa:cout << "This is your turn: " << endl;
+		cin >> row >> col;//玩家输入
+		if (chess.chessstatues[row][col] != EMPTY) {
+			cout << "Illegal enter! Please enter again." << endl;
+			goto aa;
+		}
+		chess.chessstatues[row][col] = PLcolor;//玩家落子
+		Print(chess);
+		if (isWin(point.x, point.y, chess)) {
+			cout << "You Win!" << endl;
+			break;
+		}
+	} while (true);
+	
+	system("pause");
+}
+
